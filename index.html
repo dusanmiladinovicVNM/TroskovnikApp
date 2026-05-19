@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner računa</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+    }
+
+    .app {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 24px;
+      margin: 0 0 12px;
+    }
+
+    #reader {
+      width: 100%;
+      min-height: 320px;
+      background: #000;
+      border: 2px solid #333;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    #status {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #222;
+      font-size: 18px;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    #status.ok {
+      background: #123c22;
+    }
+
+    #status.warn {
+      background: #4a370b;
+    }
+
+    #status.error {
+      background: #4a1717;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 15px;
+      border: 0;
+      border-radius: 12px;
+      background: #2f80ed;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    button.secondary {
+      background: #333;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <h1>Scanner računa</h1>
+
+    <div id="reader"></div>
+
+    <div id="status">Pritisni dugme za pokretanje kamere.</div>
+
+    <button onclick="startScanner()">Pokreni kameru</button>
+    <button class="secondary" onclick="restartScanner()">Skeniraj ponovo</button>
+  </div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <script>
+    const GAS_URL = "OVDE_STAVI_TVOJ_WEB_APP_EXEC_URL";
+
+    let scanner = null;
+    let running = false;
+    let locked = false;
+
+    function setStatus(text, type) {
+      const el = document.getElementById("status");
+      el.textContent = text;
+      el.className = "";
+
+      if (type) {
+        el.classList.add(type);
+      }
+    }
+
+    async function startScanner() {
+      if (running) return;
+
+      locked = false;
+      setStatus("Pokrećem kameru...");
+
+      try {
+        document.getElementById("reader").innerHTML = "";
+
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: {
+              width: 250,
+              height: 250
+            }
+          },
+          onScanSuccess,
+          function () {}
+        );
+
+        running = true;
+        setStatus("Kamera radi. Uperi je u QR kod sa računa.");
+      } catch (err) {
+        setStatus("Ne mogu da pokrenem kameru: " + err, "error");
+      }
+    }
+
+    async function onScanSuccess(decodedText) {
+      if (locked) return;
+      locked = true;
+
+      setStatus("QR pročitan. Šaljem u Google Sheet...");
+
+      try {
+        if (scanner && running) {
+          await scanner.stop();
+          await scanner.clear();
+        }
+      } catch (e) {}
+
+      running = false;
+
+      sendToGas(decodedText);
+    }
+
+    function sendToGas(qrText) {
+      const callbackName = "gasCallback_" + Date.now();
+
+      window[callbackName] = function(response) {
+        const result = response && response.result ? response.result : "Nema odgovora";
+
+        if (result.indexOf("OK:") === 0) {
+          setStatus(result, "ok");
+        } else if (result === "DUPLICATE") {
+          setStatus("DUPLICATE — ovaj račun je već dodat.", "warn");
+        } else {
+          setStatus(result, "error");
+        }
+
+        delete window[callbackName];
+      };
+
+      const script = document.createElement("script");
+
+      script.src =
+        GAS_URL +
+        "?qr=" +
+        encodeURIComponent(qrText) +
+        "&callback=" +
+        encodeURIComponent(callbackName);
+
+      script.onerror = function() {
+        setStatus("Greška: ne mogu da pozovem GAS backend.", "error");
+        delete window[callbackName];
+      };
+
+      document.body.appendChild(script);
+    }
+
+    async function restartScanner() {
+      try {
+        if (scanner && running) {
+          await scanner.stop();
+          await scanner.clear();
+        }
+      } catch (e) {}
+
+      running = false;
+      locked = false;
+      document.getElementById("reader").innerHTML = "";
+      setStatus("Spremno za novo skeniranje.");
+
+      startScanner();
+    }
+  </script>
+</body>
+</html>
