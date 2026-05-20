@@ -11,7 +11,8 @@ let appState = {
   vendorItems: [],
   categoryQueue: [],
   categorySearchTimer: null,
-  selectedVendor: ""
+  selectedVendor: "",
+  dashboard: null
 };
 
 document.addEventListener("DOMContentLoaded", () => {
