@@ -1,275 +1,578 @@
 const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbzSiA1M2dRFDMT0_b2xQkvFSUffSscOu1cyTJHzVdS0ucOt387OGc2W3krMyyNPq-Cm/exec";
-const STORAGE_KEYS = { GAS_URL: "racuni.gasUrl" };
+
 let scanner = null;
 let running = false;
 let locked = false;
-const els = {};
+
+let appState = {
+  gasUrl: localStorage.getItem("gasUrl") || DEFAULT_GAS_URL,
+  categories: [],
+  vendors: [],
+  vendorItems: [],
+  selectedVendor: ""
+};
 
 document.addEventListener("DOMContentLoaded", () => {
-  cacheElements();
-  initSettings();
-  bindNavigation();
-  bindButtons();
-  registerServiceWorker();
-  updateConnectionBadge();
-  window.addEventListener("online", updateConnectionBadge);
-  window.addEventListener("offline", updateConnectionBadge);
+  document.getElementById("gasUrlInput").value = appState.gasUrl;
+  setDefaultManualDate();
+  addManualItemRow();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js").catch(() => {});
+  }
+
+  if (document.getElementById("autoReloadLookups").checked) {
+    loadLookups();
+  }
 });
 
-function cacheElements() {
-  els.pageTitle = document.getElementById("pageTitle");
-  els.connectionBadge = document.getElementById("connectionBadge");
-  els.reader = document.getElementById("reader");
-  els.status = document.getElementById("status");
-  els.startBtn = document.getElementById("startBtn");
-  els.restartBtn = document.getElementById("restartBtn");
-  els.scanImageBtn = document.getElementById("scanImageBtn");
-  els.qrImageInput = document.getElementById("qrImageInput");
-  els.manualQrText = document.getElementById("manualQrText");
-  els.sendManualQrBtn = document.getElementById("sendManualQrBtn");
-  els.gasUrlInput = document.getElementById("gasUrlInput");
-  els.saveSettingsBtn = document.getElementById("saveSettingsBtn");
-  els.testGasBtn = document.getElementById("testGasBtn");
-  els.settingsStatus = document.getElementById("settingsStatus");
-}
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("screen-" + name).classList.add("active");
 
-function initSettings() {
-  const savedGasUrl = localStorage.getItem(STORAGE_KEYS.GAS_URL) || DEFAULT_GAS_URL;
-  localStorage.setItem(STORAGE_KEYS.GAS_URL, savedGasUrl);
-  els.gasUrlInput.value = savedGasUrl;
-}
+  document.querySelectorAll(".bottom-nav button").forEach(b => b.classList.remove("active"));
+  const btn = document.querySelector(`.bottom-nav button[data-screen="${name}"]`);
+  if (btn) btn.classList.add("active");
 
-function getGasUrl() {
-  return (localStorage.getItem(STORAGE_KEYS.GAS_URL) || DEFAULT_GAS_URL).trim();
+  const titles = {
+    dashboard: "Pregled",
+    scan: "Skeniraj QR",
+    manual: "Ručni unos",
+    prices: "Pretraga cena",
+    settings: "Podešavanja"
+  };
+  document.getElementById("screenTitle").textContent = titles[name] || "Računi";
 }
 
 function setStatus(text, type) {
-  els.status.textContent = text;
-  els.status.className = "status";
-  if (type) els.status.classList.add(type);
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.className = "status";
+  if (type) el.classList.add(type);
+}
+
+function setManualStatus(text, type) {
+  const el = document.getElementById("manualStatus");
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
 }
 
 function setSettingsStatus(text, type) {
-  els.settingsStatus.textContent = text;
-  els.settingsStatus.className = "status compact";
-  if (type) els.settingsStatus.classList.add(type);
+  const el = document.getElementById("settingsStatus");
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
 }
 
-function bindNavigation() {
-  document.querySelectorAll(".bottom-nav button").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const view = btn.dataset.view;
-      if (!view) return;
-      if (view !== "scan") await stopScannerSilently();
-      document.querySelectorAll(".bottom-nav button").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      document.querySelectorAll(".view").forEach((section) => section.classList.remove("active"));
-      document.getElementById(`view-${view}`).classList.add("active");
-      const titles = { dashboard: "Pregled", scan: "Skeniraj QR", manual: "Ručni unos", prices: "Pretraga cena", settings: "Podešavanja" };
-      els.pageTitle.textContent = titles[view] || "Računi";
-    });
-  });
+function formatMoney(value) {
+  const n = Number(value || 0);
+  return n.toLocaleString("sr-RS", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " RSD";
 }
 
-function bindButtons() {
-  els.startBtn.addEventListener("click", startScanner);
-  els.restartBtn.addEventListener("click", restartScanner);
-  els.scanImageBtn.addEventListener("click", () => els.qrImageInput.click());
-  els.qrImageInput.addEventListener("change", scanQrFromImage);
-  els.sendManualQrBtn.addEventListener("click", () => {
-    const qrText = els.manualQrText.value.trim();
-    if (!qrText) {
-      setStatus("Nalepi QR URL pre slanja.", "error");
-      return;
+function parseMoney(value) {
+  if (value === null || value === undefined) return 0;
+  let s = String(value).trim();
+  if (!s) return 0;
+
+  if (s.includes(".") && s.includes(",")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(",")) {
+    s = s.replace(",", ".");
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[čć]/g, "c")
+    .replace(/[š]/g, "s")
+    .replace(/[ž]/g, "z")
+    .replace(/[đ]/g, "dj")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* JSONP API */
+
+function callGasJsonp(params, onSuccess, onError) {
+  const gasUrl = appState.gasUrl || DEFAULT_GAS_URL;
+  const callbackName = "gasCb_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+
+  const script = document.createElement("script");
+  const query = new URLSearchParams();
+
+  Object.keys(params || {}).forEach(key => {
+    if (params[key] !== undefined && params[key] !== null) {
+      query.set(key, params[key]);
     }
-    sendToGas(qrText);
   });
-  els.saveSettingsBtn.addEventListener("click", () => {
-    const url = els.gasUrlInput.value.trim();
-    if (!isValidGasUrl(url)) {
-      setSettingsStatus("GAS URL mora biti https://... i završavati se na /exec.", "error");
-      return;
-    }
-    localStorage.setItem(STORAGE_KEYS.GAS_URL, url);
-    setSettingsStatus("Podešavanja sačuvana.", "ok");
-  });
-  els.testGasBtn.addEventListener("click", testGasEndpoint);
+
+  query.set("callback", callbackName);
+
+  let done = false;
+  const timeout = setTimeout(() => {
+    if (done) return;
+    done = true;
+    cleanup();
+    if (onError) onError(new Error("GAS timeout"));
+  }, 60000);
+
+  function cleanup() {
+    clearTimeout(timeout);
+    delete window[callbackName];
+    if (script.parentNode) script.parentNode.removeChild(script);
+  }
+
+  window[callbackName] = function(payload) {
+    if (done) return;
+    done = true;
+    cleanup();
+    onSuccess(payload || {});
+  };
+
+  script.onerror = function() {
+    if (done) return;
+    done = true;
+    cleanup();
+    if (onError) onError(new Error("Ne mogu da pozovem GAS backend"));
+  };
+
+  script.src = gasUrl + "?" + query.toString();
+  document.body.appendChild(script);
 }
 
-function isValidGasUrl(url) {
-  return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/i.test(url);
-}
+/* QR SCANNER */
 
 async function startScanner() {
   if (running) return;
-  if (!window.Html5Qrcode) {
-    setStatus("html5-qrcode biblioteka nije učitana. Proveri internet/CDN.", "error");
-    return;
-  }
+
   locked = false;
   setStatus("Pokrećem kameru...");
+
   try {
-    els.reader.innerHTML = "";
+    document.getElementById("reader").innerHTML = "";
     scanner = new Html5Qrcode("reader");
+
     await scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
       onScanSuccess,
-      () => {}
+      function () {}
     );
+
     running = true;
     setStatus("Kamera radi. Uperi je u QR kod sa računa.");
   } catch (err) {
-    running = false;
-    setStatus("Ne mogu da pokrenem kameru: " + formatError(err), "error");
+    setStatus("Ne mogu da pokrenem kameru: " + err, "error");
   }
 }
 
 async function onScanSuccess(decodedText) {
   if (locked) return;
   locked = true;
-  setStatus("QR pročitan. Šaljem u Google Sheet...");
-  await stopScannerSilently();
-  sendToGas(decodedText);
-}
 
-async function stopScannerSilently() {
+  setStatus("QR pročitan. Šaljem u Google Sheet...");
+
   try {
     if (scanner && running) {
       await scanner.stop();
       await scanner.clear();
     }
   } catch (e) {}
+
   running = false;
+  sendToGas(decodedText);
+}
+
+function sendToGas(qrText) {
+  callGasJsonp(
+    { qr: qrText },
+    response => {
+      const result = response && response.result ? String(response.result) : "Nema odgovora";
+
+      if (result.indexOf("OK:") === 0) {
+        setStatus(result, "ok");
+        loadLookups();
+      } else if (result === "DUPLICATE") {
+        setStatus("DUPLICATE — ovaj račun je već dodat.", "warn");
+      } else {
+        setStatus(result, "error");
+      }
+    },
+    err => setStatus("Greška: " + err.message, "error")
+  );
 }
 
 async function restartScanner() {
-  await stopScannerSilently();
+  try {
+    if (scanner && running) {
+      await scanner.stop();
+      await scanner.clear();
+    }
+  } catch (e) {}
+
+  running = false;
   locked = false;
-  els.reader.innerHTML = "";
+  document.getElementById("reader").innerHTML = "";
   setStatus("Spremno za novo skeniranje.");
   startScanner();
 }
 
 async function scanQrFromImage(event) {
-  const file = event.target.files && event.target.files[0];
-  event.target.value = "";
+  const file = event.target.files[0];
   if (!file) return;
-  if (!window.Html5Qrcode) {
-    setStatus("html5-qrcode biblioteka nije učitana. Proveri internet/CDN.", "error");
-    return;
-  }
-  await stopScannerSilently();
-  locked = true;
+
   setStatus("Čitam QR iz slike...");
+
   try {
-    els.reader.innerHTML = "";
     const imageScanner = new Html5Qrcode("reader");
     const decodedText = await imageScanner.scanFile(file, true);
-    try { await imageScanner.clear(); } catch (e) {}
     setStatus("QR pročitan iz slike. Šaljem u Google Sheet...");
     sendToGas(decodedText);
   } catch (err) {
-    locked = false;
-    setStatus("Ne mogu da pročitam QR iz slike: " + formatError(err), "error");
+    setStatus("Ne mogu da pročitam QR iz slike: " + err, "error");
+  } finally {
+    event.target.value = "";
   }
 }
 
-function sendToGas(qrText) {
-  const gasUrl = getGasUrl();
-  if (!isValidGasUrl(gasUrl)) {
-    setStatus("GAS URL nije podešen. Idi na Podeš. i unesi /exec URL.", "error");
+function sendManualQr() {
+  const text = document.getElementById("manualQrText").value.trim();
+  if (!text) {
+    setStatus("Nalepi QR URL.", "error");
     return;
   }
-  if (!qrText || !/^https?:\/\//i.test(qrText.trim())) {
-    setStatus("QR nije validan URL.", "error");
+  setStatus("Šaljem ručno unet QR URL...");
+  sendToGas(text);
+}
+
+/* SETTINGS */
+
+function saveSettings() {
+  const url = document.getElementById("gasUrlInput").value.trim();
+  if (!url) {
+    setSettingsStatus("Unesi GAS URL.", "error");
     return;
   }
-  setStatus("Šaljem u GAS...");
-  const callbackName = "gasCallback_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
-  const script = document.createElement("script");
-  const timeoutId = window.setTimeout(() => {
-    cleanupJsonp(callbackName, script);
-    setStatus("GAS nije vratio odgovor u roku. Proveri internet, deploy i Sheet.", "error");
-  }, 45000);
-  window[callbackName] = function(response) {
-    window.clearTimeout(timeoutId);
-    cleanupJsonp(callbackName, script);
-    const result = response && response.result ? String(response.result) : "Nema odgovora";
-    handleGasResult(result);
-  };
-  script.onerror = function() {
-    window.clearTimeout(timeoutId);
-    cleanupJsonp(callbackName, script);
-    setStatus("Greška: ne mogu da pozovem GAS backend.", "error");
-  };
-  script.src = gasUrl + "?qr=" + encodeURIComponent(qrText.trim()) + "&callback=" + encodeURIComponent(callbackName) + "&_ts=" + Date.now();
-  document.body.appendChild(script);
+
+  appState.gasUrl = url;
+  localStorage.setItem("gasUrl", url);
+  setSettingsStatus("Podešavanja sačuvana.", "ok");
 }
 
-function cleanupJsonp(callbackName, script) {
-  try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
-  if (script && script.parentNode) script.parentNode.removeChild(script);
+function testGas() {
+  saveSettings();
+  setSettingsStatus("Testiram GAS...");
+
+  callGasJsonp(
+    {},
+    response => {
+      const result = response && response.result ? String(response.result) : JSON.stringify(response);
+      setSettingsStatus("GAS odgovor: " + result, "ok");
+    },
+    err => setSettingsStatus("Greška: " + err.message, "error")
+  );
 }
 
-function handleGasResult(result) {
-  if (result.indexOf("OK:") === 0) return setStatus(result, "ok");
-  if (result === "DUPLICATE") return setStatus("DUPLICATE — ovaj račun je već dodat.", "warn");
-  if (result.indexOf("MANUAL JOURNAL OK:") === 0) return setStatus(result, "ok");
-  if (result.indexOf("ERROR:") === 0 || result.indexOf("HTTP ") === 0 || result.indexOf("JSON") >= 0) return setStatus(result, "error");
-  setStatus(result, "warn");
+/* LOOKUPS */
+
+function loadLookups() {
+  loadCategories();
+  loadVendors();
 }
 
-function testGasEndpoint() {
-  const gasUrl = els.gasUrlInput.value.trim();
-  if (!isValidGasUrl(gasUrl)) {
-    setSettingsStatus("GAS URL mora biti https://.../exec.", "error");
-    return;
-  }
-  localStorage.setItem(STORAGE_KEYS.GAS_URL, gasUrl);
-  setSettingsStatus("Testiram GAS endpoint...");
-  const callbackName = "gasTestCallback_" + Date.now();
-  const script = document.createElement("script");
-  const timeoutId = window.setTimeout(() => {
-    cleanupJsonp(callbackName, script);
-    setSettingsStatus("Nema odgovora od GAS-a u roku.", "error");
-  }, 20000);
-  window[callbackName] = function(response) {
-    window.clearTimeout(timeoutId);
-    cleanupJsonp(callbackName, script);
-    const result = response && response.result ? String(response.result) : "Nema odgovora";
-    setSettingsStatus("GAS odgovor: " + result, result.indexOf("OK:") === 0 ? "ok" : "warn");
-  };
-  script.onerror = function() {
-    window.clearTimeout(timeoutId);
-    cleanupJsonp(callbackName, script);
-    setSettingsStatus("Ne mogu da pozovem GAS endpoint.", "error");
-  };
-  script.src = gasUrl + "?callback=" + encodeURIComponent(callbackName) + "&_ts=" + Date.now();
-  document.body.appendChild(script);
+function loadCategories() {
+  callGasJsonp(
+    { action: "categories" },
+    response => {
+      appState.categories = response.categories || [];
+      refreshCategorySelects();
+    },
+    () => {}
+  );
 }
 
-function updateConnectionBadge() {
-  if (!els.connectionBadge) return;
-  if (navigator.onLine) {
-    els.connectionBadge.textContent = "Online";
-    els.connectionBadge.style.color = "#bbf7d0";
-  } else {
-    els.connectionBadge.textContent = "Offline";
-    els.connectionBadge.style.color = "#fed7aa";
-  }
+function loadVendors() {
+  callGasJsonp(
+    { action: "vendors" },
+    response => {
+      appState.vendors = response.vendors || [];
+      const list = document.getElementById("vendorsList");
+      list.innerHTML = "";
+      appState.vendors.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v.vendorName || v;
+        list.appendChild(opt);
+      });
+    },
+    () => {}
+  );
 }
 
-function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+function onVendorChanged() {
+  const vendor = document.getElementById("manualVendor").value.trim();
+  appState.selectedVendor = vendor;
+
+  if (!vendor) return;
+
+  callGasJsonp(
+    { action: "vendorItems", vendor },
+    response => {
+      appState.vendorItems = response.items || [];
+      refreshVendorItemsList();
+    },
+    () => {}
+  );
+}
+
+function refreshVendorItemsList() {
+  const list = document.getElementById("vendorItemsList");
+  list.innerHTML = "";
+
+  appState.vendorItems.forEach(item => {
+    const opt = document.createElement("option");
+    opt.value = item.itemName || item.ItemName || "";
+    const price = item.lastPrice || item.LastPrice || "";
+    const cat = item.category || item.Category || "";
+    opt.label = [opt.value, price ? formatMoney(price) : "", cat].filter(Boolean).join(" — ");
+    list.appendChild(opt);
   });
 }
 
-function formatError(err) {
-  if (!err) return "nepoznata greška";
-  if (typeof err === "string") return err;
-  if (err.message) return err.message;
-  return String(err);
+function refreshCategorySelects() {
+  document.querySelectorAll(".categorySelect").forEach(select => fillCategorySelect(select, select.dataset.currentValue || ""));
+}
+
+function fillCategorySelect(select, currentValue) {
+  select.innerHTML = "";
+
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "Nerazvrstano";
+  select.appendChild(empty);
+
+  appState.categories.forEach(c => {
+    const category = c.category || c.Category || "";
+    const subcategory = c.subcategory || c.Subcategory || "";
+    const value = category + "|" + subcategory;
+
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = category + " / " + subcategory;
+    select.appendChild(opt);
+  });
+
+  if (currentValue) select.value = currentValue;
+}
+
+/* MANUAL RECEIPT */
+
+function setDefaultManualDate() {
+  const el = document.getElementById("manualDate");
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  el.value = now.toISOString().slice(0, 16);
+}
+
+function addManualItemRow(prefill = {}) {
+  const container = document.getElementById("manualItems");
+  const row = document.createElement("div");
+  row.className = "item-row";
+
+  row.innerHTML = `
+    <div class="item-row-top">
+      <div class="item-row-title">Stavka</div>
+      <button type="button" class="small secondary" onclick="removeItemRow(this)">Obriši</button>
+    </div>
+
+    <label>Artikal</label>
+    <input class="itemName" list="vendorItemsList" placeholder="Izaberi ili unesi artikal" oninput="onItemNameChanged(this)" value="${escapeHtml(prefill.itemName || "")}">
+
+    <div class="grid2">
+      <div>
+        <label>Količina</label>
+        <input class="itemQty" type="number" step="0.001" min="0" value="${prefill.qty || 1}" oninput="recalcManualTotals()">
+      </div>
+      <div>
+        <label>Jed. cena</label>
+        <input class="itemUnitPrice" inputmode="decimal" placeholder="0,00" value="${prefill.unitPrice || ""}" oninput="recalcManualTotals()">
+      </div>
+    </div>
+
+    <label>Ukupno</label>
+    <input class="itemTotal" inputmode="decimal" placeholder="0,00" value="${prefill.total || ""}" oninput="recalcManualTotals()">
+
+    <label>Kategorija</label>
+    <select class="categorySelect"></select>
+
+    <label>Poreska oznaka / stopa</label>
+    <input class="itemTaxRate" placeholder="npr. Е, Ђ, A..." value="${escapeHtml(prefill.taxRate || "")}">
+  `;
+
+  container.appendChild(row);
+  fillCategorySelect(row.querySelector(".categorySelect"), "");
+  recalcManualTotals();
+}
+
+function removeItemRow(btn) {
+  btn.closest(".item-row").remove();
+  recalcManualTotals();
+}
+
+function onItemNameChanged(input) {
+  const value = input.value.trim();
+  const normalized = normalizeText(value);
+  const row = input.closest(".item-row");
+
+  const found = appState.vendorItems.find(item =>
+    normalizeText(item.itemName || item.ItemName || "") === normalized
+  );
+
+  if (!found) return;
+
+  const price = found.lastPrice || found.LastPrice || "";
+  const category = found.category || found.Category || "";
+  const subcategory = found.subcategory || found.Subcategory || "";
+  const taxRate = found.taxRate || found.TaxRate || "";
+
+  if (price) row.querySelector(".itemUnitPrice").value = String(price).replace(".", ",");
+  if (taxRate) row.querySelector(".itemTaxRate").value = taxRate;
+
+  const select = row.querySelector(".categorySelect");
+  if (category) {
+    const value = category + "|" + (subcategory || "");
+    select.dataset.currentValue = value;
+    fillCategorySelect(select, value);
+  }
+
+  recalcManualTotals();
+}
+
+function recalcManualTotals() {
+  let total = 0;
+
+  document.querySelectorAll(".item-row").forEach(row => {
+    const qty = Number(row.querySelector(".itemQty").value || 0);
+    const unit = parseMoney(row.querySelector(".itemUnitPrice").value);
+    const totalInput = row.querySelector(".itemTotal");
+
+    if (document.activeElement !== totalInput) {
+      const rowTotal = qty * unit;
+      totalInput.value = rowTotal ? rowTotal.toLocaleString("sr-RS", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+    }
+
+    total += parseMoney(totalInput.value);
+  });
+
+  document.getElementById("manualTotal").textContent = formatMoney(total);
+}
+
+function collectManualReceiptPayload() {
+  const vendor = document.getElementById("manualVendor").value.trim();
+  if (!vendor) throw new Error("Unesi prodavca.");
+
+  const items = [];
+
+  document.querySelectorAll(".item-row").forEach(row => {
+    const itemName = row.querySelector(".itemName").value.trim();
+    if (!itemName) return;
+
+    const qty = Number(row.querySelector(".itemQty").value || 0);
+    const unitPrice = parseMoney(row.querySelector(".itemUnitPrice").value);
+    const total = parseMoney(row.querySelector(".itemTotal").value);
+    const taxRate = row.querySelector(".itemTaxRate").value.trim();
+
+    const categoryValue = row.querySelector(".categorySelect").value || "";
+    const [category, subcategory] = categoryValue ? categoryValue.split("|") : ["Nerazvrstano", "Nerazvrstano"];
+
+    items.push({
+      itemName,
+      qty,
+      unitPrice,
+      total: total || qty * unitPrice,
+      category: category || "Nerazvrstano",
+      subcategory: subcategory || "Nerazvrstano",
+      taxRate,
+      rememberMode: "vendor"
+    });
+  });
+
+  if (!items.length) throw new Error("Dodaj bar jednu stavku.");
+
+  const totalAmount = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+
+  return {
+    receiptDate: document.getElementById("manualDate").value,
+    vendor,
+    invoiceNumber: document.getElementById("manualInvoiceNumber").value.trim(),
+    paymentMethod: document.getElementById("manualPaymentMethod").value,
+    note: document.getElementById("manualNote").value.trim(),
+    totalAmount,
+    items
+  };
+}
+
+function saveManualReceipt() {
+  let payload;
+
+  try {
+    payload = collectManualReceiptPayload();
+  } catch (err) {
+    setManualStatus(err.message, "error");
+    return;
+  }
+
+  const payloadText = JSON.stringify(payload);
+
+  if (payloadText.length > 6000) {
+    setManualStatus("Račun ima previše podataka za JSONP GET. Smanji broj stavki ili ćemo u sledećoj fazi dodati POST proxy.", "error");
+    return;
+  }
+
+  setManualStatus("Šaljem ručni račun u GAS...");
+
+  callGasJsonp(
+    { action: "manualReceipt", payload: payloadText },
+    response => {
+      const result = response && response.result ? String(response.result) : JSON.stringify(response);
+
+      if (result.indexOf("MANUAL OK:") === 0) {
+        setManualStatus(result, "ok");
+        resetManualForm(false);
+        loadLookups();
+      } else if (result === "DUPLICATE") {
+        setManualStatus("DUPLICATE — ovaj ručni račun je već dodat.", "warn");
+      } else {
+        setManualStatus(result, "error");
+      }
+    },
+    err => setManualStatus("Greška: " + err.message, "error")
+  );
+}
+
+function resetManualForm(resetDate = true) {
+  document.getElementById("manualVendor").value = "";
+  document.getElementById("manualInvoiceNumber").value = "";
+  document.getElementById("manualPaymentMethod").value = "MANUAL";
+  document.getElementById("manualNote").value = "";
+  document.getElementById("manualItems").innerHTML = "";
+  appState.vendorItems = [];
+  refreshVendorItemsList();
+  if (resetDate) setDefaultManualDate();
+  addManualItemRow();
+  setManualStatus("Forma je očišćena.");
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
