@@ -21,7 +21,37 @@
       <section id="screen-dashboard" class="screen">
         <div class="card">
           <h2>Dashboard</h2>
-          <p class="muted">Dashboard ide u sledećoj fazi. Za sada koristi QR i ručni unos.</p>
+
+          <div class="dash-toolbar">
+            <div>
+              <label>Godina</label>
+              <input id="dashboardYear" type="number" min="2020" max="2100">
+            </div>
+
+            <div>
+              <label>Mesec</label>
+              <select id="dashboardMonth">
+                <option value="1">Januar</option>
+                <option value="2">Februar</option>
+                <option value="3">Mart</option>
+                <option value="4">April</option>
+                <option value="5">Maj</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Avgust</option>
+                <option value="9">Septembar</option>
+                <option value="10">Oktobar</option>
+                <option value="11">Novembar</option>
+                <option value="12">Decembar</option>
+              </select>
+            </div>
+          </div>
+
+          <button onclick="loadDashboard()">Osveži dashboard</button>
+
+          <div id="dashboardStatus" class="status mt">Izaberi mesec i osveži dashboard.</div>
+
+          <div id="dashboardContent" class="dashboard-content"></div>
         </div>
       </section>
 
