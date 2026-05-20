@@ -1,0 +1,12 @@
+{
+  "name": "Računi PWA",
+  "short_name": "Računi",
+  "description": "PWA za skeniranje fiskalnih računa i analizu troškova.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#111827",
+  "orientation": "portrait",
+  "icons": []
+}
