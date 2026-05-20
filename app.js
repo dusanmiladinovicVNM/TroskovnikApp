@@ -20,6 +20,8 @@ document.addEventListener("DOMContentLoaded", () => {
   setDefaultDashboardPeriod();
   setDefaultManualDate();
   addManualItemRow();
+  setDefaultReportsPeriod();
+  onReportsTypeChange();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
@@ -56,6 +58,12 @@ function showScreen(name) {
 
   if (name === "dashboard") {
     loadDashboard();
+  }
+
+  if (name === "reports") {
+    setDefaultReportsPeriod();
+    onReportsTypeChange();
+    loadReports();
   }
 }
 
@@ -954,3 +962,241 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+/* PHASE 6 — Reports frontend patch
+Add this to app.js.
+Requires existing callGasJsonp(), formatMoney(), escapeHtml().
+*/
+
+function setDefaultReportsPeriod() {
+  const now = new Date();
+
+  const yearEl = document.getElementById("reportsYear");
+  const yearAEl = document.getElementById("reportsYearA");
+  const yearBEl = document.getElementById("reportsYearB");
+  const monthEl = document.getElementById("reportsMonth");
+
+  if (yearEl && !yearEl.value) yearEl.value = now.getFullYear();
+  if (yearAEl && !yearAEl.value) yearAEl.value = now.getFullYear();
+  if (yearBEl && !yearBEl.value) yearBEl.value = now.getFullYear() - 1;
+  if (monthEl && monthEl.value === undefined) monthEl.value = "";
+}
+
+function onReportsTypeChange() {
+  const type = document.getElementById("reportsType")?.value || "category";
+
+  document.querySelectorAll(".reports-compare").forEach(el => {
+    el.classList.toggle("hidden", type !== "yearlyCompare");
+  });
+
+  document.querySelectorAll(".reports-period").forEach(el => {
+    el.classList.toggle("hidden", type === "yearlyCompare");
+  });
+
+  const qEl = document.getElementById("reportsQuery");
+
+  if (qEl) {
+    if (type === "priceTrend") {
+      qEl.placeholder = "Unesi naziv artikla, npr. mleko";
+    } else {
+      qEl.placeholder = "Filter: artikal, prodavac, kategorija";
+    }
+  }
+}
+
+function setReportsStatus(text, type) {
+  const el = document.getElementById("reportsStatus");
+  if (!el) return;
+
+  el.textContent = text;
+  el.className = "status mt";
+
+  if (type) {
+    el.classList.add(type);
+  }
+}
+
+function loadReports() {
+  const type = document.getElementById("reportsType")?.value || "category";
+  const year = document.getElementById("reportsYear")?.value || "";
+  const month = document.getElementById("reportsMonth")?.value || "";
+  const yearA = document.getElementById("reportsYearA")?.value || "";
+  const yearB = document.getElementById("reportsYearB")?.value || "";
+  const q = document.getElementById("reportsQuery")?.value || "";
+
+  setReportsStatus("Učitavam izveštaj...");
+
+  callGasJsonp(
+    {
+      action: "reports",
+      type,
+      year,
+      month,
+      yearA,
+      yearB,
+      q,
+      limit: 80
+    },
+    response => {
+      if (!response || response.ok === false) {
+        setReportsStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+
+      renderReports(response);
+      setReportsStatus("Izveštaj osvežen.", "ok");
+    },
+    err => {
+      setReportsStatus("Greška: " + err.message, "error");
+    }
+  );
+}
+
+function renderReports(data) {
+  const root = document.getElementById("reportsContent");
+  if (!root) return;
+
+  const summary = data.summary || {};
+  const type = data.type || "category";
+
+  let body = "";
+
+  if (type === "monthly") {
+    body = renderReportsTable(
+      ["Mesec", "Iznos", "Stavki"],
+      (data.report?.rows || []).map(r => [
+        escapeHtml(r.key),
+        formatMoney(r.amount),
+        r.count || 0
+      ])
+    );
+  } else if (type === "yearlyCompare") {
+    body = renderYearlyCompareReport(data.report || {});
+  } else if (type === "vendor") {
+    body = renderReportsTable(
+      ["Prodavac", "Iznos", "Računa"],
+      (data.report?.rows || []).map(r => [
+        escapeHtml(r.vendor),
+        formatMoney(r.amount),
+        r.receiptCount || 0
+      ])
+    );
+  } else if (type === "topItems") {
+    body = renderReportsTable(
+      ["Artikal", "Prodavac", "Iznos"],
+      (data.report?.rows || []).map(r => [
+        escapeHtml(r.itemName),
+        escapeHtml(r.vendor),
+        formatMoney(r.amount)
+      ])
+    );
+  } else if (type === "priceTrend") {
+    body = renderPriceTrendReport(data.report || {});
+  } else {
+    body = renderReportsTable(
+      ["Kategorija", "Iznos", "Stavki"],
+      (data.report?.rows || []).map(r => [
+        `${escapeHtml(r.category)} / ${escapeHtml(r.subcategory)}`,
+        formatMoney(r.amount),
+        r.count || 0
+      ])
+    );
+  }
+
+  root.innerHTML = `
+    <div class="reports-summary-grid">
+      <div class="reports-summary-card">
+        <span>Ukupno</span>
+        <strong>${formatMoney(summary.totalAmount)}</strong>
+      </div>
+      <div class="reports-summary-card">
+        <span>Računa</span>
+        <strong>${summary.receiptCount || 0}</strong>
+      </div>
+      <div class="reports-summary-card">
+        <span>Stavki</span>
+        <strong>${summary.itemCount || 0}</strong>
+      </div>
+      <div class="reports-summary-card">
+        <span>Nerazvrstano</span>
+        <strong>${summary.uncategorizedCount || 0}</strong>
+      </div>
+    </div>
+
+    <div class="reports-section">
+      ${body}
+    </div>
+  `;
+}
+
+function renderReportsTable(headers, rows) {
+  if (!rows.length) {
+    return `<div class="empty-state">Nema podataka za izabrane filtere.</div>`;
+  }
+
+  return `
+    <div class="reports-table">
+      <div class="reports-row reports-head">
+        ${headers.map(h => `<div>${escapeHtml(h)}</div>`).join("")}
+      </div>
+      ${rows.map(row => `
+        <div class="reports-row">
+          ${row.map(cell => `<div>${cell}</div>`).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderYearlyCompareReport(report) {
+  const rows = report.rows || [];
+  const yearA = report.yearA || "";
+  const yearB = report.yearB || "";
+
+  if (!rows.length) {
+    return `<div class="empty-state">Nema podataka za poređenje.</div>`;
+  }
+
+  return renderReportsTable(
+    ["Mesec", String(yearA), String(yearB)],
+    rows.map(r => [
+      r.month,
+      `${formatMoney(r.amountA)}<br><small>Razlika: ${formatMoney(r.difference)}</small>`,
+      formatMoney(r.amountB)
+    ])
+  );
+}
+
+function renderPriceTrendReport(report) {
+  const rows = report.rows || [];
+
+  if (!rows.length) {
+    return `<div class="empty-state">${escapeHtml(report.message || "Nema podataka za ovaj artikal.")}</div>`;
+  }
+
+  return `
+    <div class="price-summary">
+      <div><span>Min</span><strong>${formatMoney(report.minPrice)}</strong></div>
+      <div><span>Prosek</span><strong>${formatMoney(report.averagePrice)}</strong></div>
+      <div><span>Max</span><strong>${formatMoney(report.maxPrice)}</strong></div>
+    </div>
+
+    ${renderReportsTable(
+      ["Datum", "Prodavac", "Cena"],
+      rows.map(r => [
+        escapeHtml(r.date || ""),
+        `${escapeHtml(r.vendor)}<br><small>${escapeHtml(r.itemName)}</small>`,
+        formatMoney(r.unitPrice)
+      ])
+    )}
+  `;
+}
+
+/* Add this inside your existing DOMContentLoaded:
+   setDefaultReportsPeriod();
+   onReportsTypeChange();
+
+   Add this inside showScreen(name):
+   if (name === "reports") { setDefaultReportsPeriod(); onReportsTypeChange(); loadReports(); }
+*/
+
