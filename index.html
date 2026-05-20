@@ -4,88 +4,126 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Računi PWA</title>
-  <meta name="theme-color" content="#111827">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <header class="app-header">
+  <div class="app">
+    <header class="topbar">
       <div>
-        <p class="eyebrow">Lični troškovi</p>
-        <h1 id="pageTitle">Skeniraj QR</h1>
+        <div class="eyebrow">Lične finansije</div>
+        <h1 id="screenTitle">Skeniraj QR</h1>
       </div>
-      <div id="connectionBadge" class="badge">PWA</div>
+      <div id="syncBadge" class="badge">PWA</div>
     </header>
 
     <main>
-      <section id="view-dashboard" class="view">
+      <section id="screen-dashboard" class="screen">
         <div class="card">
           <h2>Dashboard</h2>
-          <p class="muted">Dashboard kreće u kasnijoj fazi. Za sada je aktivan QR import.</p>
-          <div class="grid two">
-            <div class="metric"><span>Faza</span><strong>2</strong></div>
-            <div class="metric"><span>Status</span><strong>QR</strong></div>
-          </div>
+          <p class="muted">Dashboard ide u sledećoj fazi. Za sada koristi QR i ručni unos.</p>
         </div>
       </section>
 
-      <section id="view-scan" class="view active">
+      <section id="screen-scan" class="screen active">
         <div class="card">
           <h2>QR skener</h2>
-          <p class="muted">Skeniraj QR sa računa, QR sa ekrana ili QR iz screenshot-a.</p>
           <div id="reader"></div>
           <div id="status" class="status">Spremno. Pokreni kameru ili izaberi sliku.</div>
 
-          <button id="startBtn" class="primary" type="button">Pokreni kameru</button>
-          <button id="restartBtn" class="secondary" type="button">Skeniraj ponovo</button>
+          <button onclick="startScanner()">Pokreni kameru</button>
+          <button class="secondary" onclick="restartScanner()">Skeniraj ponovo</button>
 
-          <input id="qrImageInput" type="file" accept="image/*" hidden>
-          <button id="scanImageBtn" class="secondary" type="button">Skeniraj QR iz slike</button>
+          <input type="file" id="qrImageInput" accept="image/*" hidden onchange="scanQrFromImage(event)">
+          <button class="secondary" onclick="document.getElementById('qrImageInput').click()">Skeniraj QR iz slike</button>
 
-          <details class="manual-details">
-            <summary>Ručno nalepi QR URL za test</summary>
-            <textarea id="manualQrText" rows="4" placeholder="Nalepi QR verification URL ovde..."></textarea>
-            <button id="sendManualQrBtn" class="secondary" type="button">Pošalji QR URL</button>
+          <details class="mt">
+            <summary>Test: nalepi QR URL ručno</summary>
+            <textarea id="manualQrText" rows="4" placeholder="Nalepi QR verification URL..."></textarea>
+            <button onclick="sendManualQr()">Pošalji QR URL</button>
           </details>
         </div>
       </section>
 
-      <section id="view-manual" class="view">
+      <section id="screen-manual" class="screen">
         <div class="card">
-          <h2>Ručni unos</h2>
-          <p class="muted">Ručni unos računa i stavki dolazi u Fazi 3.</p>
+          <h2>Ručni unos računa</h2>
+
+          <label>Datum računa</label>
+          <input id="manualDate" type="datetime-local">
+
+          <label>Prodavac</label>
+          <input id="manualVendor" list="vendorsList" placeholder="Izaberi ili unesi prodavca" oninput="onVendorChanged()">
+          <datalist id="vendorsList"></datalist>
+
+          <label>Broj računa / napomena broj</label>
+          <input id="manualInvoiceNumber" placeholder="Opcionalno">
+
+          <label>Način plaćanja</label>
+          <select id="manualPaymentMethod">
+            <option value="MANUAL">MANUAL</option>
+            <option value="Платна картица">Платна картица</option>
+            <option value="Готовина">Готовина</option>
+            <option value="Остало">Остало</option>
+          </select>
+
+          <label>Napomena</label>
+          <input id="manualNote" placeholder="Opcionalno">
+
+          <div class="section-head">
+            <h3>Stavke</h3>
+            <button class="small" onclick="addManualItemRow()">+ Stavka</button>
+          </div>
+
+          <datalist id="vendorItemsList"></datalist>
+          <div id="manualItems"></div>
+
+          <div class="totalBox">
+            <span>Ukupno</span>
+            <strong id="manualTotal">0,00 RSD</strong>
+          </div>
+
+          <button onclick="saveManualReceipt()">Sačuvaj račun</button>
+          <button class="secondary" onclick="resetManualForm()">Očisti formu</button>
+
+          <div id="manualStatus" class="status mt">Izaberi prodavca, pa dodaj stavke.</div>
         </div>
       </section>
 
-      <section id="view-prices" class="view">
+      <section id="screen-prices" class="screen">
         <div class="card">
           <h2>Pretraga cena</h2>
-          <p class="muted">Shopping assistant dolazi u kasnijoj fazi. Koristiće VendorItems indeks iz Faze 1.</p>
+          <p class="muted">Price assistant ide u kasnijoj fazi. VendorItems indeks je već pripremljen.</p>
         </div>
       </section>
 
-      <section id="view-settings" class="view">
+      <section id="screen-settings" class="screen">
         <div class="card">
           <h2>Podešavanja</h2>
-          <label class="field">
-            <span>GAS Web App URL</span>
-            <input id="gasUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+
+          <label>GAS Web App URL</label>
+          <input id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+
+          <label>
+            <input id="autoReloadLookups" type="checkbox" checked>
+            Učitaj kategorije/prodavce pri startu
           </label>
-          <button id="saveSettingsBtn" class="primary" type="button">Sačuvaj podešavanja</button>
-          <button id="testGasBtn" class="secondary" type="button">Testiraj GAS endpoint</button>
-          <div id="settingsStatus" class="status compact">Unesi GAS /exec URL ako nije već upisan.</div>
-          <p class="muted small">Ovaj PWA koristi JSONP jer tvoj Code.gs podržava <code>callback</code> parametar.</p>
+
+          <button onclick="saveSettings()">Sačuvaj podešavanja</button>
+          <button class="secondary" onclick="testGas()">Testiraj GAS endpoint</button>
+          <button class="secondary" onclick="loadLookups()">Osveži kategorije/prodavce</button>
+
+          <div id="settingsStatus" class="status mt">Podešavanja su lokalno sačuvana u browseru.</div>
         </div>
       </section>
     </main>
 
-    <nav class="bottom-nav" aria-label="Glavna navigacija">
-      <button data-view="dashboard" type="button">Pregled</button>
-      <button data-view="scan" type="button" class="active">QR</button>
-      <button data-view="manual" type="button">Ručni</button>
-      <button data-view="prices" type="button">Cene</button>
-      <button data-view="settings" type="button">Podeš.</button>
+    <nav class="bottom-nav">
+      <button data-screen="dashboard" onclick="showScreen('dashboard')">Pregled</button>
+      <button data-screen="scan" class="active" onclick="showScreen('scan')">QR</button>
+      <button data-screen="manual" onclick="showScreen('manual')">Ručni</button>
+      <button data-screen="prices" onclick="showScreen('prices')">Cene</button>
+      <button data-screen="settings" onclick="showScreen('settings')">Podeš.</button>
     </nav>
   </div>
 
