@@ -9,6 +9,8 @@ let appState = {
   categories: [],
   vendors: [],
   vendorItems: [],
+  categoryQueue: [],
+  categorySearchTimer: null,
   selectedVendor: ""
 };
 
@@ -23,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (document.getElementById("autoReloadLookups").checked) {
     loadLookups();
+    loadCategoryCoverage();
   }
 });
 
@@ -38,10 +41,16 @@ function showScreen(name) {
     dashboard: "Pregled",
     scan: "Skeniraj QR",
     manual: "Ručni unos",
+    categorize: "Kategorizacija",
     prices: "Pretraga cena",
     settings: "Podešavanja"
   };
   document.getElementById("screenTitle").textContent = titles[name] || "Računi";
+
+  if (name === "categorize") {
+    loadCategoryCoverage();
+    loadCategoryQueue();
+  }
 }
 
 function setStatus(text, type) {
@@ -60,6 +69,14 @@ function setManualStatus(text, type) {
 
 function setSettingsStatus(text, type) {
   const el = document.getElementById("settingsStatus");
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
+}
+
+function setCategorizeStatus(text, type) {
+  const el = document.getElementById("categoryStatus");
+  if (!el) return;
   el.textContent = text;
   el.className = "status mt";
   if (type) el.classList.add(type);
@@ -567,6 +584,154 @@ function resetManualForm(resetDate = true) {
   if (resetDate) setDefaultManualDate();
   addManualItemRow();
   setManualStatus("Forma je očišćena.");
+}
+
+
+/* CATEGORIZATION — PHASE 4 */
+
+function loadCategoryCoverage() {
+  const el = document.getElementById("categoryCoverage");
+  if (!el) return;
+
+  callGasJsonp(
+    { action: "categoryCoverage" },
+    response => {
+      const total = Number(response.total || 0);
+      const categorized = Number(response.categorized || 0);
+      const uncategorized = Number(response.uncategorized || 0);
+      const percent = total ? Math.round((categorized / total) * 100) : 0;
+
+      el.textContent = `Kategorisano: ${categorized}/${total} (${percent}%). Nerazvrstano: ${uncategorized}.`;
+    },
+    () => {
+      el.textContent = "Ne mogu da učitam status kategorizacije.";
+    }
+  );
+}
+
+function debouncedLoadCategoryQueue() {
+  clearTimeout(appState.categorySearchTimer);
+  appState.categorySearchTimer = setTimeout(loadCategoryQueue, 350);
+}
+
+function loadCategoryQueue() {
+  const qEl = document.getElementById("categorySearch");
+  const q = qEl ? qEl.value.trim() : "";
+
+  setCategorizeStatus("Učitavam nerazvrstane artikle...");
+
+  callGasJsonp(
+    { action: "categoryQueue", q, limit: 80 },
+    response => {
+      appState.categoryQueue = response.items || [];
+      renderCategoryQueue();
+
+      const total = response.total || appState.categoryQueue.length;
+      if (appState.categoryQueue.length) {
+        setCategorizeStatus(`Prikazujem ${appState.categoryQueue.length} od ${total} nerazvrstanih artikala.`, "ok");
+      } else {
+        setCategorizeStatus("Nema nerazvrstanih artikala za prikaz.", "ok");
+      }
+    },
+    err => setCategorizeStatus("Greška: " + err.message, "error")
+  );
+}
+
+function renderCategoryQueue() {
+  const container = document.getElementById("categoryQueue");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (!appState.categoryQueue.length) {
+    container.innerHTML = `<div class="empty-state">Nema stavki za kategorizaciju.</div>`;
+    return;
+  }
+
+  appState.categoryQueue.forEach((item, index) => {
+    const card = document.createElement("div");
+    card.className = "category-card";
+    card.dataset.index = String(index);
+
+    const lastPrice = item.lastPrice ? formatMoney(item.lastPrice) : "bez cene";
+    const timesBought = item.timesBought || 1;
+    const tax = item.taxRate ? `Porez: ${escapeHtml(item.taxRate)}` : "";
+
+    card.innerHTML = `
+      <div class="category-card-title">${escapeHtml(item.itemName || "")}</div>
+      <div class="category-card-meta">${escapeHtml(item.vendorName || "")}</div>
+      <div class="category-pill-row">
+        <span class="pill">${lastPrice}</span>
+        <span class="pill">${timesBought} kup.</span>
+        ${tax ? `<span class="pill">${tax}</span>` : ""}
+      </div>
+
+      <div class="category-actions">
+        <label>Kategorija</label>
+        <select class="categorySelect categoryAssignSelect"></select>
+
+        <label>Primeni</label>
+        <select class="rememberMode">
+          <option value="vendor">Uvek za ovaj artikal kod ovog prodavca</option>
+          <option value="global">Uvek za ovaj artikal kod svih prodavaca</option>
+          <option value="both">Kod ovog prodavca + globalno</option>
+        </select>
+
+        <button onclick="saveCategoryForQueueItem(this)">Sačuvaj kategoriju</button>
+      </div>
+    `;
+
+    container.appendChild(card);
+    fillCategorySelect(card.querySelector(".categoryAssignSelect"), "");
+  });
+}
+
+function saveCategoryForQueueItem(btn) {
+  const card = btn.closest(".category-card");
+  const index = Number(card.dataset.index || 0);
+  const item = appState.categoryQueue[index];
+  if (!item) return;
+
+  const categoryValue = card.querySelector(".categoryAssignSelect").value || "";
+  if (!categoryValue) {
+    setCategorizeStatus("Izaberi kategoriju pre čuvanja.", "error");
+    return;
+  }
+
+  const [category, subcategory] = categoryValue.split("|");
+  const rememberMode = card.querySelector(".rememberMode").value || "vendor";
+
+  const payload = {
+    vendorName: item.vendorName,
+    itemName: item.itemName,
+    category,
+    subcategory,
+    taxRate: item.taxRate || "",
+    price: item.lastPrice || "",
+    rememberMode
+  };
+
+  btn.disabled = true;
+  btn.textContent = "Čuvam...";
+  setCategorizeStatus("Čuvam kategoriju...");
+
+  callGasJsonp(
+    { action: "updateCategory", payload: JSON.stringify(payload) },
+    response => {
+      const result = response && response.result ? String(response.result) : JSON.stringify(response);
+      setCategorizeStatus(result, result.indexOf("OK") === 0 ? "ok" : "warn");
+
+      appState.categoryQueue.splice(index, 1);
+      renderCategoryQueue();
+      loadCategoryCoverage();
+      loadLookups();
+    },
+    err => {
+      btn.disabled = false;
+      btn.textContent = "Sačuvaj kategoriju";
+      setCategorizeStatus("Greška: " + err.message, "error");
+    }
+  );
 }
 
 function escapeHtml(value) {
