@@ -197,7 +197,7 @@ label {
   transform: translateX(-50%);
   width: min(720px, 100%);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 1px;
   background: #06070a;
   border-top: 1px solid var(--line);
@@ -223,4 +223,70 @@ details summary {
   color: var(--muted);
   cursor: pointer;
   padding: 8px 0;
+}
+
+
+/* Phase 4 — Categorization */
+.mini-stats {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--card2);
+  color: var(--muted);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.category-queue {
+  margin-top: 14px;
+}
+
+.category-card {
+  background: #10131a;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.category-card-title {
+  font-weight: bold;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.category-card-meta {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.category-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.category-actions {
+  margin-top: 10px;
+}
+
+.empty-state {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 16px;
+  color: var(--muted);
+  text-align: center;
 }
