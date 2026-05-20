@@ -17,6 +17,7 @@ let appState = {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("gasUrlInput").value = appState.gasUrl;
+  setDefaultDashboardPeriod();
   setDefaultManualDate();
   addManualItemRow();
 
@@ -51,6 +52,10 @@ function showScreen(name) {
   if (name === "categorize") {
     loadCategoryCoverage();
     loadCategoryQueue();
+  }
+
+  if (name === "dashboard") {
+    loadDashboard();
   }
 }
 
@@ -114,6 +119,213 @@ function normalizeText(value) {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/* DASHBOARD */
+
+function setDefaultDashboardPeriod() {
+  const now = new Date();
+
+  const yearEl = document.getElementById("dashboardYear");
+  const monthEl = document.getElementById("dashboardMonth");
+
+  if (yearEl) yearEl.value = now.getFullYear();
+  if (monthEl) monthEl.value = now.getMonth() + 1;
+}
+
+function setDashboardStatus(text, type) {
+  const el = document.getElementById("dashboardStatus");
+  if (!el) return;
+
+  el.textContent = text;
+  el.className = "status mt";
+
+  if (type) {
+    el.classList.add(type);
+  }
+}
+
+function loadDashboard() {
+  const year = Number(document.getElementById("dashboardYear")?.value || new Date().getFullYear());
+  const month = Number(document.getElementById("dashboardMonth")?.value || (new Date().getMonth() + 1));
+
+  setDashboardStatus("Učitavam dashboard...");
+
+  callGasJsonp(
+    {
+      action: "dashboard",
+      year,
+      month
+    },
+    response => {
+      if (!response || response.ok === false) {
+        setDashboardStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+
+      const dashboard = response.dashboard;
+
+      if (!dashboard) {
+        setDashboardStatus("GAS nije vratio dashboard podatke.", "error");
+        return;
+      }
+
+      appState.dashboard = dashboard;
+      renderDashboard(dashboard);
+      setDashboardStatus("Dashboard osvežen.", "ok");
+    },
+    err => {
+      setDashboardStatus("Greška: " + err.message, "error");
+    }
+  );
+}
+
+function renderDashboard(d) {
+  const root = document.getElementById("dashboardContent");
+  if (!root) return;
+
+  const s = d.summary || {};
+  const prev = d.previousMonth || {};
+
+  const diff = Number(prev.difference || 0);
+  const diffPct = prev.differencePct === null || prev.differencePct === undefined
+    ? "n/a"
+    : Number(prev.differencePct).toLocaleString("sr-RS", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      }) + "%";
+
+  const diffClass = diff > 0 ? "bad" : diff < 0 ? "good" : "";
+
+  root.innerHTML = `
+    <div class="dash-grid">
+      <div class="dash-card">
+        <span>Ukupno</span>
+        <strong>${formatMoney(s.totalAmount)}</strong>
+      </div>
+
+      <div class="dash-card">
+        <span>Računa</span>
+        <strong>${s.receiptCount || 0}</strong>
+      </div>
+
+      <div class="dash-card">
+        <span>Stavki</span>
+        <strong>${s.itemCount || 0}</strong>
+      </div>
+
+      <div class="dash-card">
+        <span>Nerazvrstano</span>
+        <strong>${s.uncategorizedCount || 0}</strong>
+      </div>
+    </div>
+
+    <div class="dash-section">
+      <h3>Poređenje sa prethodnim mesecom</h3>
+      <div class="compare-box">
+        <div>
+          <span>Prethodni mesec</span>
+          <strong>${formatMoney(prev.totalAmount)}</strong>
+        </div>
+        <div>
+          <span>Razlika</span>
+          <strong class="${diffClass}">${formatMoney(diff)}</strong>
+        </div>
+        <div>
+          <span>Razlika %</span>
+          <strong class="${diffClass}">${diffPct}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-section">
+      <h3>Top kategorije</h3>
+      ${renderDashboardTable(
+        ["Kategorija", "Iznos", "Stavki"],
+        (d.categoryTotals || []).slice(0, 10).map(r => [
+          `${escapeHtml(r.category || "")} / ${escapeHtml(r.subcategory || "")}`,
+          formatMoney(r.amount),
+          r.count || 0
+        ])
+      )}
+    </div>
+
+    <div class="dash-section">
+      <h3>Top prodavci</h3>
+      ${renderDashboardTable(
+        ["Prodavac", "Iznos", "Stavki"],
+        (d.vendorTotals || []).slice(0, 10).map(r => [
+          escapeHtml(r.vendor || ""),
+          formatMoney(r.amount),
+          r.count || 0
+        ])
+      )}
+    </div>
+
+    <div class="dash-section">
+      <h3>Potrošnja po danima</h3>
+      ${renderDailyBars(d.dailyTotals || [])}
+    </div>
+
+    <div class="dash-section">
+      <h3>Top artikli</h3>
+      ${renderDashboardTable(
+        ["Artikal", "Iznos", "Kom"],
+        (d.topItems || []).slice(0, 10).map(r => [
+          escapeHtml(r.itemName || r.name || ""),
+          formatMoney(r.amount),
+          r.count || 0
+        ])
+      )}
+    </div>
+  `;
+}
+
+function renderDashboardTable(headers, rows) {
+  if (!rows.length) {
+    return `<div class="empty-state">Nema podataka za izabrani period.</div>`;
+  }
+
+  return `
+    <div class="mini-table">
+      <div class="mini-row mini-head">
+        ${headers.map(h => `<div>${escapeHtml(h)}</div>`).join("")}
+      </div>
+
+      ${rows.map(row => `
+        <div class="mini-row">
+          ${row.map(cell => `<div>${cell}</div>`).join("")}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderDailyBars(rows) {
+  if (!rows.length) {
+    return `<div class="empty-state">Nema dnevnih podataka za izabrani period.</div>`;
+  }
+
+  const max = rows.reduce((m, r) => Math.max(m, Number(r.amount || 0)), 0) || 1;
+
+  return `
+    <div class="daily-bars">
+      ${rows.map(r => {
+        const amount = Number(r.amount || 0);
+        const pct = Math.max(2, Math.round((amount / max) * 100));
+
+        return `
+          <div class="daily-bar-row">
+            <div class="daily-day">${r.day}</div>
+            <div class="daily-bar-track">
+              <div class="daily-bar-fill" style="width:${pct}%"></div>
+            </div>
+            <div class="daily-amount">${formatMoney(amount)}</div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
 
 /* JSONP API */
