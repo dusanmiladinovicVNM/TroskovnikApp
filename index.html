@@ -90,6 +90,27 @@
         </div>
       </section>
 
+
+      <section id="screen-categorize" class="screen">
+        <div class="card">
+          <h2>Kategorizacija</h2>
+          <p class="muted">Razvrstaj artikle koji još nemaju kategoriju. Kada sačuvaš kategoriju, sistem je pamti za buduće račune.</p>
+
+          <div id="categoryCoverage" class="mini-stats">Učitavam status...</div>
+
+          <label>Pretraga nerazvrstanih artikala</label>
+          <input id="categorySearch" placeholder="npr. mleko, kesa, delfi..." oninput="debouncedLoadCategoryQueue()">
+
+          <div class="grid2">
+            <button onclick="loadCategoryQueue()">Osveži listu</button>
+            <button class="secondary" onclick="loadCategoryCoverage()">Status</button>
+          </div>
+
+          <div id="categoryStatus" class="status mt">Učitaj listu nerazvrstanih artikala.</div>
+          <div id="categoryQueue" class="category-queue"></div>
+        </div>
+      </section>
+
       <section id="screen-prices" class="screen">
         <div class="card">
           <h2>Pretraga cena</h2>
@@ -122,6 +143,7 @@
       <button data-screen="dashboard" onclick="showScreen('dashboard')">Pregled</button>
       <button data-screen="scan" class="active" onclick="showScreen('scan')">QR</button>
       <button data-screen="manual" onclick="showScreen('manual')">Ručni</button>
+      <button data-screen="categorize" onclick="showScreen('categorize')">Kategor.</button>
       <button data-screen="prices" onclick="showScreen('prices')">Cene</button>
       <button data-screen="settings" onclick="showScreen('settings')">Podeš.</button>
     </nav>
