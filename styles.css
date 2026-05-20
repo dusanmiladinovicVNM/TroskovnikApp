@@ -454,3 +454,113 @@ details summary {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* PHASE 6 — Reports styles
+Add this to the end of styles.css.
+*/
+
+.reports-toolbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.reports-content {
+  margin-top: 16px;
+}
+
+.reports-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.reports-summary-card {
+  background: #10131a;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.reports-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.reports-summary-card strong {
+  font-size: 20px;
+}
+
+.reports-section {
+  margin-top: 12px;
+}
+
+.reports-table {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #10131a;
+}
+
+.reports-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr .7fr;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  align-items: center;
+}
+
+.reports-row:first-child {
+  border-top: 0;
+}
+
+.reports-head {
+  background: var(--card2);
+  color: var(--muted);
+  font-weight: bold;
+}
+
+.reports-row small {
+  color: var(--muted);
+}
+
+.price-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.price-summary div {
+  background: #10131a;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.price-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.price-summary strong {
+  font-size: 16px;
+}
+
+@media (min-width: 680px) {
+  .reports-toolbar {
+    grid-template-columns: 1.2fr .8fr .8fr 1.2fr;
+  }
+}
+
