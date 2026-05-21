@@ -13,7 +13,9 @@ let appState = {
   categorySearchTimer: null,
   selectedVendor: "",
   dashboard: null,
-  budgets: null
+  budgets: null,
+  priceSearch: null,
+  priceSearchTimer: null
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -71,6 +73,11 @@ function showScreen(name) {
   if (name === "budgets") {
        setDefaultBudgetsPeriod();
        loadBudgets();
+  }
+
+  if (name === "prices") {
+    const q = document.getElementById("priceSearchQuery")?.value || "";
+    if (q.trim().length >= 2) loadPriceSearch();
   }
 }
 
@@ -1388,4 +1395,225 @@ function formatPercent(value) {
   }) + "%";
 }
 
+/* PHASE 8 — PRICE SEARCH / SHOPPING ASSISTANT */
+
+function setPriceStatus(text, type) {
+  const el = document.getElementById("priceStatus");
+  if (!el) return;
+
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
+}
+
+function debouncedPriceSearch() {
+  clearTimeout(appState.priceSearchTimer);
+  appState.priceSearchTimer = setTimeout(() => {
+    const q = document.getElementById("priceSearchQuery")?.value || "";
+    if (q.trim().length >= 2) loadPriceSearch();
+  }, 500);
+}
+
+function loadPriceSearch() {
+  const query = document.getElementById("priceSearchQuery")?.value.trim() || "";
+  const currentPrice = document.getElementById("priceCurrentPrice")?.value.trim() || "";
+
+  if (query.length < 2) {
+    setPriceStatus("Unesi bar 2 karaktera za pretragu.", "warn");
+    return;
+  }
+
+  setPriceStatus("Pretražujem cene...");
+
+  callGasJsonp(
+    {
+      action: "priceSearch",
+      query,
+      currentPrice,
+      limit: 30
+    },
+    response => {
+      if (!response || response.ok === false) {
+        setPriceStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+
+      appState.priceSearch = response;
+      try {
+        localStorage.setItem("lastPriceSearch", JSON.stringify(response));
+      } catch (e) {}
+
+      renderPriceSearch(response);
+      const count = (response.groups || []).length;
+      setPriceStatus(count ? "Pronađeno grupa artikala: " + count : "Nema rezultata za ovu pretragu.", count ? "ok" : "warn");
+    },
+    err => {
+      const cached = localStorage.getItem("lastPriceSearch");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          appState.priceSearch = parsed;
+          renderPriceSearch(parsed);
+          setPriceStatus("GAS nije dostupan. Prikazujem poslednju keširanu pretragu.", "warn");
+          return;
+        } catch (e) {}
+      }
+      setPriceStatus("Greška: " + err.message, "error");
+    }
+  );
+}
+
+function clearPriceSearch() {
+  const queryEl = document.getElementById("priceSearchQuery");
+  const currentPriceEl = document.getElementById("priceCurrentPrice");
+  const resultsEl = document.getElementById("priceResults");
+
+  if (queryEl) queryEl.value = "";
+  if (currentPriceEl) currentPriceEl.value = "";
+  if (resultsEl) resultsEl.innerHTML = "";
+
+  setPriceStatus("Unesi naziv artikla za pretragu.");
+}
+
+function renderPriceSearch(data) {
+  const root = document.getElementById("priceResults");
+  if (!root) return;
+
+  const groups = data.groups || [];
+
+  if (!groups.length) {
+    root.innerHTML = `<div class="empty-state">Nema rezultata. Probaj kraći naziv ili drugi termin.</div>`;
+    return;
+  }
+
+  root.innerHTML = groups.map(renderPriceGroup).join("");
+}
+
+function renderPriceGroup(group) {
+  const stats = group.stats || {};
+  const compare = group.currentCompare;
+
+  let compareHtml = "";
+  if (compare) {
+    const diff = Number(compare.difference || 0);
+    const cls = compare.status === "good" ? "good" : compare.status === "bad" ? "bad" : "warn";
+    const pct = compare.differencePct == null
+      ? "n/a"
+      : Number(compare.differencePct).toLocaleString("sr-RS", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+
+    compareHtml = `
+      <div class="price-compare ${cls}">
+        <div><span>Trenutna cena</span><strong>${formatMoney(compare.currentPrice)}</strong></div>
+        <div><span>Najbolja poznata</span><strong>${formatMoney(compare.bestKnownPrice)}</strong></div>
+        <div><span>Razlika</span><strong>${formatMoney(diff)} (${pct})</strong></div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="price-card">
+      <div class="price-head">
+        <div>
+          <h3>${escapeHtml(group.displayName || group.normalizedItem)}</h3>
+          <p>${escapeHtml(group.category || "")} ${group.subcategory ? "/ " + escapeHtml(group.subcategory) : ""}</p>
+        </div>
+        <div class="price-best">
+          <span>Najniža poslednja</span>
+          <strong>${formatMoney(stats.minLastPrice)}</strong>
+        </div>
+      </div>
+
+      <div class="price-stats">
+        <div><span>Prodavnica</span><strong>${group.vendorCount || 0}</strong></div>
+        <div><span>Najbolji prodavac</span><strong>${escapeHtml(stats.bestVendorName || "-")}</strong></div>
+        <div><span>Prosek poslednjih</span><strong>${formatMoney(stats.averageLastPrice)}</strong></div>
+        <div><span>Najniža ikad</span><strong>${formatMoney(stats.minEverPrice)}</strong></div>
+      </div>
+
+      ${compareHtml}
+
+      <div class="vendor-price-list">
+        ${(group.vendors || []).map(v => renderVendorPriceRow(v)).join("")}
+      </div>
+
+      <button class="secondary small-btn" onclick="loadPriceHistory('${escapeJs(group.normalizedItem)}', this)">Prikaži istoriju cena</button>
+      <div class="price-history"></div>
+    </div>
+  `;
+}
+
+function renderVendorPriceRow(v) {
+  return `
+    <div class="vendor-price-row">
+      <div>
+        <strong>${escapeHtml(v.vendorName || "")}</strong>
+        <span>${escapeHtml(v.itemName || "")}</span>
+      </div>
+      <div>
+        <strong>${formatMoney(v.lastPrice)}</strong>
+        <span>min ${formatMoney(v.minPrice)} · avg ${formatMoney(v.averagePrice)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function loadPriceHistory(normalizedItem, button) {
+  const box = button.closest(".price-card")?.querySelector(".price-history");
+  if (!box) return;
+
+  box.innerHTML = `<div class="empty-state">Učitavam istoriju...</div>`;
+
+  callGasJsonp(
+    { action: "priceHistory", normalizedItem, limit: 40 },
+    response => {
+      if (!response || response.ok === false) {
+        box.innerHTML = `<div class="empty-state error-text">Greška: ${escapeHtml(JSON.stringify(response))}</div>`;
+        return;
+      }
+      renderPriceHistory(box, response.rows || []);
+    },
+    err => {
+      box.innerHTML = `<div class="empty-state error-text">Greška: ${escapeHtml(err.message)}</div>`;
+    }
+  );
+}
+
+function renderPriceHistory(root, rows) {
+  if (!rows.length) {
+    root.innerHTML = `<div class="empty-state">Nema istorije za ovaj artikal.</div>`;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="history-list">
+      ${rows.map(row => `
+        <div class="history-row">
+          <div>
+            <strong>${formatDateShort(row.receiptDate || row.importedAt)}</strong>
+            <span>${escapeHtml(row.vendorName || "")}</span>
+          </div>
+          <div>
+            <strong>${formatMoney(row.unitPrice)}</strong>
+            <span>kol. ${escapeHtml(row.quantity || "")}</span>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function formatDateShort(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("sr-RS");
+}
+
+function escapeJs(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "");
+}
 
