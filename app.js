@@ -12,7 +12,8 @@ let appState = {
   categoryQueue: [],
   categorySearchTimer: null,
   selectedVendor: "",
-  dashboard: null
+  dashboard: null,
+  budgets: null
 };
 
 document.addEventListener("DOMContentLoaded", () => {
