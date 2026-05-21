@@ -15,7 +15,10 @@ let appState = {
   dashboard: null,
   budgets: null,
   priceSearch: null,
-  priceSearchTimer: null
+  priceSearchTimer: null,
+  publicPriceSources: [],
+  publicPriceSearch: null,
+  publicPriceSearchTimer: null
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -79,6 +82,11 @@ function showScreen(name) {
     const q = document.getElementById("priceSearchQuery")?.value || "";
     if (q.trim().length >= 2) loadPriceSearch();
   }
+
+  if (name === "public-prices") {
+    loadPublicPriceSources();
+  }
+
 }
 
 function setStatus(text, type) {
@@ -1617,3 +1625,212 @@ function escapeJs(value) {
     .replace(/\r/g, "");
 }
 
+/* PHASE 8A — JAVNI CENOVNICI / OPEN DATA */
+
+function setPublicPricesStatus(text, type) {
+  const el = document.getElementById("publicPricesStatus");
+  if (!el) return;
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
+}
+
+function setPublicPriceSearchStatus(text, type) {
+  const el = document.getElementById("publicPriceSearchStatus");
+  if (!el) return;
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
+}
+
+function addPublicPriceSource() {
+  const retailerName = document.getElementById("publicSourceRetailer")?.value.trim() || "";
+  const resourceUrl = document.getElementById("publicSourceUrl")?.value.trim() || "";
+  const importLimitRows = Number(document.getElementById("publicSourceLimit")?.value || 5000);
+  const notes = document.getElementById("publicSourceNotes")?.value.trim() || "";
+
+  if (!retailerName || !resourceUrl) {
+    setPublicPricesStatus("Popuni trgovca i CSV URL.", "error");
+    return;
+  }
+
+  setPublicPricesStatus("Čuvam izvor...");
+
+  callGasJsonp(
+    {
+      action: "addPublicPriceSource",
+      payload: JSON.stringify({ retailerName, resourceUrl, importLimitRows, notes })
+    },
+    response => {
+      const result = response && response.result ? response.result : JSON.stringify(response);
+      setPublicPricesStatus(result, result && result.indexOf("ERROR") === 0 ? "error" : "ok");
+      loadPublicPriceSources();
+    },
+    err => setPublicPricesStatus("Greška: " + err.message, "error")
+  );
+}
+
+function loadPublicPriceSources() {
+  setPublicPricesStatus("Učitavam izvore...");
+
+  callGasJsonp(
+    { action: "publicPriceSources" },
+    response => {
+      if (!response || response.ok === false) {
+        setPublicPricesStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+
+      appState.publicPriceSources = response.sources || [];
+      renderPublicPriceSources(appState.publicPriceSources);
+      setPublicPricesStatus("Izvori učitani: " + appState.publicPriceSources.length, "ok");
+    },
+    err => setPublicPricesStatus("Greška: " + err.message, "error")
+  );
+}
+
+function renderPublicPriceSources(sources) {
+  const root = document.getElementById("publicSourcesList");
+  if (!root) return;
+
+  if (!sources.length) {
+    root.innerHTML = `<div class="empty-state">Nema dodatih javnih cenovnika.</div>`;
+    return;
+  }
+
+  root.innerHTML = sources.map(src => `
+    <div class="public-source-card">
+      <div>
+        <strong>${escapeHtml(src.retailerName || src.sourceId)}</strong>
+        <span>${escapeHtml(src.resourceUrl || "")}</span>
+        <small>Status: ${escapeHtml(src.lastStatus || "-")}</small>
+      </div>
+      <button class="secondary small-btn" onclick="importPublicPriceSource('${escapeJs(src.sourceId)}')">Import</button>
+    </div>
+  `).join("");
+}
+
+function importPublicPriceSource(sourceId) {
+  const limit = Number(document.getElementById("publicSourceLimit")?.value || 0);
+  setPublicPricesStatus("Uvozim cenovnik. Ovo može potrajati...");
+
+  callGasJsonp(
+    { action: "publicPriceImport", sourceId, limit },
+    response => {
+      if (!response || response.ok === false) {
+        setPublicPricesStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+      setPublicPricesStatus("Import OK: " + response.importedRows + " redova. PublicProducts: " + (response.productsIndex?.rows || 0), "ok");
+      loadPublicPriceSources();
+    },
+    err => setPublicPricesStatus("Greška: " + err.message, "error")
+  );
+}
+
+function debouncedPublicPriceSearch() {
+  clearTimeout(appState.publicPriceSearchTimer);
+  appState.publicPriceSearchTimer = setTimeout(() => {
+    const q = document.getElementById("publicPriceQuery")?.value || "";
+    if (q.trim().length >= 2) loadPublicPriceSearch();
+  }, 500);
+}
+
+function loadPublicPriceSearch() {
+  const query = document.getElementById("publicPriceQuery")?.value.trim() || "";
+  const currentPrice = document.getElementById("publicCurrentPrice")?.value.trim() || "";
+
+  if (query.length < 2) {
+    setPublicPriceSearchStatus("Unesi bar 2 karaktera.", "warn");
+    return;
+  }
+
+  setPublicPriceSearchStatus("Pretražujem javne cenovnike...");
+
+  callGasJsonp(
+    { action: "publicPriceSearch", query, currentPrice, limit: 40 },
+    response => {
+      if (!response || response.ok === false) {
+        setPublicPriceSearchStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+      appState.publicPriceSearch = response;
+      renderPublicPriceSearch(response);
+      const count = (response.groups || []).length;
+      setPublicPriceSearchStatus(count ? "Pronađeno: " + count : "Nema rezultata.", count ? "ok" : "warn");
+    },
+    err => setPublicPriceSearchStatus("Greška: " + err.message, "error")
+  );
+}
+
+function renderPublicPriceSearch(data) {
+  const root = document.getElementById("publicPriceResults");
+  if (!root) return;
+
+  const groups = data.groups || [];
+  if (!groups.length) {
+    root.innerHTML = `<div class="empty-state">Nema rezultata u javnim cenovnicima.</div>`;
+    return;
+  }
+
+  root.innerHTML = groups.map(renderPublicPriceGroup).join("");
+}
+
+function renderPublicPriceGroup(group) {
+  let compareHtml = "";
+  const compare = group.currentCompare;
+  if (compare) {
+    const cls = compare.status === "good" ? "good" : compare.status === "bad" ? "bad" : "warn";
+    const pct = compare.differencePct == null
+      ? "n/a"
+      : Number(compare.differencePct).toLocaleString("sr-RS", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+
+    compareHtml = `
+      <div class="public-compare ${cls}">
+        <div><span>Tvoja trenutna cena</span><strong>${formatMoney(compare.currentPrice)}</strong></div>
+        <div><span>Najbolja javna cena</span><strong>${formatMoney(compare.bestPublicPrice)}</strong></div>
+        <div><span>Razlika</span><strong>${formatMoney(compare.difference)} (${pct})</strong></div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="public-price-card">
+      <div class="public-price-head">
+        <div>
+          <h3>${escapeHtml(group.displayName || "")}</h3>
+          <p>${escapeHtml(group.brand || "")} ${group.categoryName ? " · " + escapeHtml(group.categoryName) : ""}</p>
+          ${group.barcode ? `<small>Barcode: ${escapeHtml(group.barcode)}</small>` : ""}
+        </div>
+        <div class="public-best">
+          <span>Najbolja cena</span>
+          <strong>${formatMoney(group.bestCurrentPrice)}</strong>
+          <small>${escapeHtml(group.bestRetailerName || "")}</small>
+        </div>
+      </div>
+
+      ${compareHtml}
+
+      <div class="public-retailer-list">
+        ${(group.retailers || []).map(renderPublicRetailerRow).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderPublicRetailerRow(row) {
+  return `
+    <div class="public-retailer-row ${row.isDiscounted ? "discounted" : ""}">
+      <div>
+        <strong>${escapeHtml(row.retailerName || "")}</strong>
+        <span>${escapeHtml(row.productName || "")}</span>
+        <small>${formatDateShort(row.priceDate)} ${row.unit ? " · " + escapeHtml(row.unit) : ""}</small>
+      </div>
+      <div>
+        <strong>${formatMoney(row.currentPrice)}</strong>
+        <span>${row.isDiscounted ? "sniženo" : "redovno"}</span>
+        ${row.unitPrice ? `<small>po jm ${formatMoney(row.unitPrice)}</small>` : ""}
+      </div>
+    </div>
+  `;
+}
