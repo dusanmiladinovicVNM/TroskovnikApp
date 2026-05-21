@@ -134,6 +134,45 @@
         </div>
       </section>
 
+      <!-- Phase 7 — Budžeti -->
+      <section id="screen-budgets" class="screen">
+        <div class="card">
+          <h2>Budžeti</h2>
+
+          <div class="budget-toolbar">
+            <div>
+              <label>Godina</label>
+              <input id="budgetsYear" type="number" min="2020" max="2100">
+            </div>
+
+            <div>
+              <label>Mesec</label>
+              <select id="budgetsMonth">
+                <option value="1">Januar</option>
+                <option value="2">Februar</option>
+                <option value="3">Mart</option>
+                <option value="4">April</option>
+                <option value="5">Maj</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Avgust</option>
+                <option value="9">Septembar</option>
+                <option value="10">Oktobar</option>
+                <option value="11">Novembar</option>
+                <option value="12">Decembar</option>
+              </select>
+            </div>
+          </div>
+
+          <button onclick="loadBudgets()">Osveži budžete</button>
+          <button class="secondary" onclick="saveAllBudgets()">Sačuvaj sve planirane iznose</button>
+
+          <div id="budgetsStatus" class="status mt">Izaberi mesec i osveži budžete.</div>
+
+          <div id="budgetsContent" class="budgets-content"></div>
+        </div>
+      </section>
+
       <section id="screen-scan" class="screen active">
         <div class="card">
           <h2>QR skener</h2>
@@ -251,6 +290,7 @@
     <nav class="bottom-nav">
       <button data-screen="dashboard" onclick="showScreen('dashboard')">Pregled</button>
       <button data-screen="reports" onclick="showScreen('reports')">Izveštaji</button>
+      <button data-screen="budgets" onclick="showScreen('budgets')">Budžeti</button>
       <button data-screen="scan" class="active" onclick="showScreen('scan')">QR</button>
       <button data-screen="manual" onclick="showScreen('manual')">Ručni</button>
       <button data-screen="categorize" onclick="showScreen('categorize')">Kategor.</button>
