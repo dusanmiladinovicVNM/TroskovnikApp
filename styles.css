@@ -685,3 +685,148 @@ Add this to the end of styles.css.
   }
 }
 
+/* Phase 8 — Price Search */
+
+.price-results {
+  margin-top: 16px;
+}
+
+.price-card {
+  border: 1px solid var(--line);
+  background: #10131a;
+  border-radius: 18px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.price-head {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.price-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.price-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.price-best {
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.price-best span,
+.price-stats span,
+.vendor-price-row span,
+.history-row span,
+.price-compare span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.price-best strong {
+  font-size: 20px;
+}
+
+.price-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.price-stats > div {
+  background: rgba(255,255,255,.035);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.price-stats strong {
+  font-size: 14px;
+}
+
+.price-compare {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+  border-radius: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+}
+
+.price-compare.good {
+  background: rgba(35, 140, 72, .20);
+}
+
+.price-compare.warn {
+  background: rgba(160, 120, 30, .20);
+}
+
+.price-compare.bad {
+  background: rgba(160, 40, 40, .20);
+}
+
+.vendor-price-list {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.vendor-price-row,
+.history-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  align-items: center;
+}
+
+.vendor-price-row:first-child,
+.history-row:first-child {
+  border-top: 0;
+}
+
+.vendor-price-row > div:last-child,
+.history-row > div:last-child {
+  text-align: right;
+}
+
+.price-history {
+  margin-top: 10px;
+}
+
+.history-list {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.error-text {
+  color: #ff7a7a;
+}
+
+@media (min-width: 620px) {
+  .price-head {
+    grid-template-columns: 1fr 180px;
+  }
+
+  .price-compare {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
