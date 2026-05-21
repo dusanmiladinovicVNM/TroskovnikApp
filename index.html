@@ -259,12 +259,28 @@
         </div>
       </section>
 
+      <!-- Phase 8 — Pretraga cena / shopping assistant -->
       <section id="screen-prices" class="screen">
         <div class="card">
           <h2>Pretraga cena</h2>
-          <p class="muted">Price assistant ide u kasnijoj fazi. VendorItems indeks je već pripremljen.</p>
+          <p class="muted">Pretraži artikal i uporedi poslednje cene po prodavnicama. Podaci dolaze iz tvoje baze računa.</p>
+
+          <label>Artikal</label>
+          <input id="priceSearchQuery" placeholder="npr. mleko, hleb, čokolada..." oninput="debouncedPriceSearch()">
+
+          <label>Trenutna cena u prodavnici, opciono</label>
+          <input id="priceCurrentPrice" inputmode="decimal" placeholder="npr. 129,99" oninput="debouncedPriceSearch()">
+
+          <div class="grid2">
+            <button onclick="loadPriceSearch()">Pretraži</button>
+            <button class="secondary" onclick="clearPriceSearch()">Očisti</button>
+          </div>
+
+          <div id="priceStatus" class="status mt">Unesi naziv artikla za pretragu.</div>
+          <div id="priceResults" class="price-results"></div>
         </div>
       </section>
+
 
       <section id="screen-settings" class="screen">
         <div class="card">
