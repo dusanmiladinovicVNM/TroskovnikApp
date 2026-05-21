@@ -830,3 +830,132 @@ Add this to the end of styles.css.
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* Phase 8A — Public prices */
+
+.public-sources-list,
+.public-price-results {
+  margin-top: 14px;
+}
+
+.public-source-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  background: #10131a;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
+.public-source-card span,
+.public-source-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.public-price-card {
+  background: #10131a;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.public-price-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.public-price-head h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.public-price-head p,
+.public-price-head small {
+  display: block;
+  color: var(--muted);
+  margin: 0;
+  font-size: 12px;
+}
+
+.public-best {
+  text-align: right;
+  min-width: 110px;
+}
+
+.public-best span,
+.public-best small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.public-best strong {
+  display: block;
+  font-size: 18px;
+}
+
+.public-compare {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 10px;
+  border: 1px solid var(--line);
+}
+
+.public-compare.good { background: rgba(85, 214, 122, .12); }
+.public-compare.warn { background: rgba(255, 200, 87, .12); }
+.public-compare.bad { background: rgba(255, 122, 122, .12); }
+
+.public-compare span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.public-retailer-list {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.public-retailer-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.public-retailer-row.discounted strong:last-child,
+.public-retailer-row.discounted > div:last-child span {
+  color: #55d67a;
+}
+
+.public-retailer-row span,
+.public-retailer-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.public-retailer-row > div:last-child {
+  text-align: right;
+}
+
+@media (min-width: 620px) {
+  .public-compare {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
