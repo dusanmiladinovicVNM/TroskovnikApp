@@ -281,6 +281,50 @@
         </div>
       </section>
 
+      <section id="screen-public-prices" class="screen">
+        <div class="card">
+          <h2>Javni cenovnici</h2>
+          <p class="muted">Dodaj CSV cenovnike trgovaca sa data.gov.rs ili direktne CSV URL-ove trgovaca, pa ih pretražuj uz svoju istoriju cena.</p>
+
+          <div class="form-grid">
+            <div>
+              <label>Trgovac</label>
+              <input id="publicSourceRetailer" placeholder="npr. Vero, Okov, Lidl...">
+            </div>
+            <div>
+              <label>Limit redova za test</label>
+              <input id="publicSourceLimit" type="number" value="5000" min="1" max="50000">
+            </div>
+          </div>
+
+          <label>CSV URL</label>
+          <input id="publicSourceUrl" placeholder="https://.../cenovnik.csv">
+
+          <label>Napomena</label>
+          <input id="publicSourceNotes" placeholder="opciono">
+
+          <button onclick="addPublicPriceSource()">Dodaj / ažuriraj izvor</button>
+          <button class="secondary" onclick="loadPublicPriceSources()">Osveži izvore</button>
+
+          <div id="publicPricesStatus" class="status mt">Dodaj izvor ili osveži postojeće izvore.</div>
+          <div id="publicSourcesList" class="public-sources-list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Pretraga javnih cena</h2>
+
+          <label>Artikal</label>
+          <input id="publicPriceQuery" placeholder="npr. mleko, hleb, deterdžent..." oninput="debouncedPublicPriceSearch()">
+
+          <label>Trenutna cena koju vidiš u prodavnici</label>
+          <input id="publicCurrentPrice" placeholder="npr. 129,99" oninput="debouncedPublicPriceSearch()">
+
+          <button onclick="loadPublicPriceSearch()">Pretraži javne cenovnike</button>
+
+          <div id="publicPriceSearchStatus" class="status mt">Unesi naziv artikla za pretragu.</div>
+          <div id="publicPriceResults" class="public-price-results"></div>
+        </div>
+      </section>
 
       <section id="screen-settings" class="screen">
         <div class="card">
@@ -311,6 +355,7 @@
       <button data-screen="manual" onclick="showScreen('manual')">Ručni</button>
       <button data-screen="categorize" onclick="showScreen('categorize')">Kategor.</button>
       <button data-screen="prices" onclick="showScreen('prices')">Cene</button>
+      <button data-screen="public-prices" onclick="showScreen('public-prices')">Javne cene</button>
       <button data-screen="settings" onclick="showScreen('settings')">Podeš.</button>
     </nav>
   </div>
