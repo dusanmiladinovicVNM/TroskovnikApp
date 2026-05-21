@@ -22,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   addManualItemRow();
   setDefaultReportsPeriod();
   onReportsTypeChange();
+  setDefaultBudgetsPeriod();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
@@ -64,6 +65,11 @@ function showScreen(name) {
     setDefaultReportsPeriod();
     onReportsTypeChange();
     loadReports();
+  }
+
+  if (name === "budgets") {
+       setDefaultBudgetsPeriod();
+       loadBudgets();
   }
 }
 
@@ -1192,11 +1198,193 @@ function renderPriceTrendReport(report) {
   `;
 }
 
-/* Add this inside your existing DOMContentLoaded:
-   setDefaultReportsPeriod();
-   onReportsTypeChange();
+/* PHASE 7 — BUDGETS */
 
-   Add this inside showScreen(name):
-   if (name === "reports") { setDefaultReportsPeriod(); onReportsTypeChange(); loadReports(); }
-*/
+function setDefaultBudgetsPeriod() {
+  const now = new Date();
+  const yearEl = document.getElementById("budgetsYear");
+  const monthEl = document.getElementById("budgetsMonth");
+
+  if (yearEl && !yearEl.value) yearEl.value = now.getFullYear();
+  if (monthEl && !monthEl.value) monthEl.value = now.getMonth() + 1;
+}
+
+function setBudgetsStatus(text, type) {
+  const el = document.getElementById("budgetsStatus");
+  if (!el) return;
+
+  el.textContent = text;
+  el.className = "status mt";
+  if (type) el.classList.add(type);
+}
+
+function loadBudgets() {
+  setDefaultBudgetsPeriod();
+
+  const year = Number(document.getElementById("budgetsYear")?.value || new Date().getFullYear());
+  const month = Number(document.getElementById("budgetsMonth")?.value || (new Date().getMonth() + 1));
+
+  setBudgetsStatus("Učitavam budžete...");
+
+  callGasJsonp(
+    { action: "budgets", year, month },
+    response => {
+      if (!response || response.ok === false) {
+        setBudgetsStatus("Greška: " + JSON.stringify(response), "error");
+        return;
+      }
+
+      appState.budgets = response;
+      renderBudgets(response);
+      setBudgetsStatus("Budžeti osveženi.", "ok");
+    },
+    err => setBudgetsStatus("Greška: " + err.message, "error")
+  );
+}
+
+function renderBudgets(data) {
+  const root = document.getElementById("budgetsContent");
+  if (!root) return;
+
+  const summary = data.summary || {};
+  const rows = data.rows || [];
+
+  root.innerHTML = `
+    <div class="budget-summary-grid">
+      <div class="dash-card"><span>Planirano</span><strong>${formatMoney(summary.totalPlanned)}</strong></div>
+      <div class="dash-card"><span>Ostvareno</span><strong>${formatMoney(summary.totalActual)}</strong></div>
+      <div class="dash-card"><span>Razlika</span><strong class="${Number(summary.difference || 0) > 0 ? "bad" : "good"}">${formatMoney(summary.difference)}</strong></div>
+      <div class="dash-card"><span>Iskorišćenje</span><strong>${formatPercent(summary.percentUsed)}</strong></div>
+    </div>
+
+    <div class="budget-list">
+      ${rows.map(renderBudgetRow).join("")}
+    </div>
+  `;
+}
+
+function renderBudgetRow(row) {
+  const planned = Number(row.plannedAmount || 0);
+  const actual = Number(row.actualAmount || 0);
+  const percent = row.percentUsed == null ? 0 : Number(row.percentUsed);
+  const pctWidth = planned > 0 ? Math.min(100, Math.max(2, percent)) : 0;
+
+  const statusText = row.status === "over"
+    ? "Preko plana"
+    : row.status === "warn"
+      ? "Blizu limita"
+      : row.status === "ok"
+        ? "U planu"
+        : "Bez plana";
+
+  return `
+    <div class="budget-row" data-category="${escapeHtml(row.category)}" data-subcategory="${escapeHtml(row.subcategory)}">
+      <div class="budget-row-head">
+        <div>
+          <strong>${escapeHtml(row.category)} / ${escapeHtml(row.subcategory)}</strong>
+          <span>${statusText}</span>
+        </div>
+        <div class="budget-row-amount">${formatMoney(actual)}</div>
+      </div>
+
+      <div class="budget-progress ${escapeHtml(row.status || "none")}">
+        <div style="width:${pctWidth}%"></div>
+      </div>
+
+      <div class="budget-row-grid">
+        <div>
+          <label>Planirano</label>
+          <input class="budget-input" type="number" inputmode="decimal" step="0.01" value="${planned || ""}" data-category="${escapeHtml(row.category)}" data-subcategory="${escapeHtml(row.subcategory)}">
+        </div>
+        <div><label>Ostvareno</label><div class="budget-readonly">${formatMoney(actual)}</div></div>
+        <div><label>Razlika</label><div class="budget-readonly ${Number(row.difference || 0) > 0 ? "bad" : "good"}">${formatMoney(row.difference)}</div></div>
+        <div><label>%</label><div class="budget-readonly">${formatPercent(row.percentUsed)}</div></div>
+      </div>
+
+      <button class="secondary small-btn" onclick="saveBudgetFromButton(this)">Sačuvaj ovaj budžet</button>
+    </div>
+  `;
+}
+
+function saveBudgetFromButton(button) {
+  const rowEl = button.closest(".budget-row");
+  if (!rowEl) return;
+
+  const input = rowEl.querySelector(".budget-input");
+  if (!input) return;
+
+  const year = Number(document.getElementById("budgetsYear")?.value || new Date().getFullYear());
+  const month = Number(document.getElementById("budgetsMonth")?.value || (new Date().getMonth() + 1));
+
+  const payload = {
+    year,
+    month,
+    category: input.dataset.category,
+    subcategory: input.dataset.subcategory,
+    plannedAmount: input.value || 0
+  };
+
+  setBudgetsStatus("Čuvam budžet...");
+
+  callGasJsonp(
+    { action: "saveBudget", payload: JSON.stringify(payload) },
+    response => {
+      const result = response && response.result ? response.result : JSON.stringify(response);
+      if (String(result).indexOf("BUDGET OK:") === 0) {
+        setBudgetsStatus(result, "ok");
+        loadBudgets();
+      } else {
+        setBudgetsStatus(result, "error");
+      }
+    },
+    err => setBudgetsStatus("Greška: " + err.message, "error")
+  );
+}
+
+function saveAllBudgets() {
+  const inputs = Array.from(document.querySelectorAll(".budget-input"));
+  const year = Number(document.getElementById("budgetsYear")?.value || new Date().getFullYear());
+  const month = Number(document.getElementById("budgetsMonth")?.value || (new Date().getMonth() + 1));
+
+  const items = inputs
+    .filter(input => input.value !== "")
+    .map(input => ({
+      year,
+      month,
+      category: input.dataset.category,
+      subcategory: input.dataset.subcategory,
+      plannedAmount: input.value || 0
+    }));
+
+  if (!items.length) {
+    setBudgetsStatus("Nema unetih planiranih iznosa za čuvanje.", "warn");
+    return;
+  }
+
+  setBudgetsStatus("Čuvam sve budžete...");
+
+  callGasJsonp(
+    { action: "saveBudgetsBulk", payload: JSON.stringify({ items }) },
+    response => {
+      const result = response && response.result ? response.result : JSON.stringify(response);
+      if (String(result).indexOf("BUDGET BULK OK:") === 0 || String(result).indexOf("BUDGET OK:") === 0) {
+        setBudgetsStatus(result, "ok");
+        loadBudgets();
+      } else {
+        setBudgetsStatus(result, "error");
+      }
+    },
+    err => setBudgetsStatus("Greška: " + err.message, "error")
+  );
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || value === "") return "n/a";
+
+  return Number(value).toLocaleString("sr-RS", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1
+  }) + "%";
+}
+
 
