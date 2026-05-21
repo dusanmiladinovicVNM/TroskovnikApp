@@ -55,6 +55,85 @@
         </div>
       </section>
 
+      <section id="screen-reports" class="screen">
+        <div class="card">
+          <h2>Izveštaji</h2>
+
+          <div class="form-grid">
+            <div>
+              <label>Tip izveštaja</label>
+              <select id="reportsType" onchange="onReportsTypeChange()">
+                <option value="category">Po kategorijama</option>
+                <option value="monthly">Po mesecima</option>
+                <option value="yearly">Poređenje godina</option>
+                <option value="vendor">Po prodavcima</option>
+                <option value="topItems">Top artikli</option>
+                <option value="priceTrend">Trend cene artikla</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Godina od</label>
+              <input id="reportsYearFrom" type="number" min="2020" max="2100">
+            </div>
+
+            <div>
+              <label>Mesec od</label>
+              <select id="reportsMonthFrom">
+                <option value="1">Januar</option>
+                <option value="2">Februar</option>
+                <option value="3">Mart</option>
+                <option value="4">April</option>
+                <option value="5">Maj</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Avgust</option>
+                <option value="9">Septembar</option>
+                <option value="10">Oktobar</option>
+                <option value="11">Novembar</option>
+                <option value="12">Decembar</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Godina do</label>
+              <input id="reportsYearTo" type="number" min="2020" max="2100">
+            </div>
+
+            <div>
+              <label>Mesec do</label>
+              <select id="reportsMonthTo">
+                <option value="1">Januar</option>
+                <option value="2">Februar</option>
+                <option value="3">Mart</option>
+                <option value="4">April</option>
+                <option value="5">Maj</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Avgust</option>
+                <option value="9">Septembar</option>
+                <option value="10">Oktobar</option>
+                <option value="11">Novembar</option>
+                <option value="12">Decembar</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="reportsSearchBox" class="mt" style="display:none;">
+            <label>Pretraga artikla</label>
+            <input id="reportsQuery" placeholder="npr. mleko, hleb, gorivo...">
+          </div>
+
+          <button onclick="loadReports()">Prikaži izveštaj</button>
+
+          <div id="reportsStatus" class="status mt">
+            Izaberi tip izveštaja i period.
+          </div>
+
+          <div id="reportsContent" class="reports-content"></div>
+        </div>
+      </section>
+
       <section id="screen-scan" class="screen active">
         <div class="card">
           <h2>QR skener</h2>
@@ -171,6 +250,7 @@
 
     <nav class="bottom-nav">
       <button data-screen="dashboard" onclick="showScreen('dashboard')">Pregled</button>
+      <button data-screen="reports" onclick="showScreen('reports')">Izveštaji</button>
       <button data-screen="scan" class="active" onclick="showScreen('scan')">QR</button>
       <button data-screen="manual" onclick="showScreen('manual')">Ručni</button>
       <button data-screen="categorize" onclick="showScreen('categorize')">Kategor.</button>
