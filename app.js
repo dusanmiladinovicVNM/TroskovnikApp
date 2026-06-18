@@ -50,10 +50,13 @@ function showScreen(name) {
 
   const titles = {
     dashboard: "Pregled",
+    reports: "Izveštaji",
+    budgets: "Budžeti",
     scan: "Skeniraj QR",
     manual: "Ručni unos",
     categorize: "Kategorizacija",
     prices: "Pretraga cena",
+    "public-prices": "Javni cenovnici",
     settings: "Podešavanja"
   };
   document.getElementById("screenTitle").textContent = titles[name] || "Računi";

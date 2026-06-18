@@ -178,6 +178,12 @@ label {
   gap: 10px;
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 .totalBox {
   margin-top: 12px;
   padding: 14px;

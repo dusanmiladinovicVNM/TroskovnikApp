@@ -59,27 +59,26 @@
         <div class="card">
           <h2>Izveštaji</h2>
 
+          <label>Tip izveštaja</label>
+          <select id="reportsType" onchange="onReportsTypeChange()">
+            <option value="category">Po kategorijama</option>
+            <option value="monthly">Po mesecima</option>
+            <option value="yearlyCompare">Poređenje godina</option>
+            <option value="vendor">Po prodavcima</option>
+            <option value="topItems">Top artikli</option>
+            <option value="priceTrend">Trend cene artikla</option>
+          </select>
+
           <div class="form-grid">
-            <div>
-              <label>Tip izveštaja</label>
-              <select id="reportsType" onchange="onReportsTypeChange()">
-                <option value="category">Po kategorijama</option>
-                <option value="monthly">Po mesecima</option>
-                <option value="yearly">Poređenje godina</option>
-                <option value="vendor">Po prodavcima</option>
-                <option value="topItems">Top artikli</option>
-                <option value="priceTrend">Trend cene artikla</option>
-              </select>
+            <div class="reports-period">
+              <label>Godina</label>
+              <input id="reportsYear" type="number" min="2020" max="2100">
             </div>
 
-            <div>
-              <label>Godina od</label>
-              <input id="reportsYearFrom" type="number" min="2020" max="2100">
-            </div>
-
-            <div>
-              <label>Mesec od</label>
-              <select id="reportsMonthFrom">
+            <div class="reports-period">
+              <label>Mesec</label>
+              <select id="reportsMonth">
+                <option value="">Cela godina</option>
                 <option value="1">Januar</option>
                 <option value="2">Februar</option>
                 <option value="3">Mart</option>
@@ -95,33 +94,20 @@
               </select>
             </div>
 
-            <div>
-              <label>Godina do</label>
-              <input id="reportsYearTo" type="number" min="2020" max="2100">
+            <div class="reports-compare hidden">
+              <label>Godina A</label>
+              <input id="reportsYearA" type="number" min="2020" max="2100">
             </div>
 
-            <div>
-              <label>Mesec do</label>
-              <select id="reportsMonthTo">
-                <option value="1">Januar</option>
-                <option value="2">Februar</option>
-                <option value="3">Mart</option>
-                <option value="4">April</option>
-                <option value="5">Maj</option>
-                <option value="6">Jun</option>
-                <option value="7">Jul</option>
-                <option value="8">Avgust</option>
-                <option value="9">Septembar</option>
-                <option value="10">Oktobar</option>
-                <option value="11">Novembar</option>
-                <option value="12">Decembar</option>
-              </select>
+            <div class="reports-compare hidden">
+              <label>Godina B</label>
+              <input id="reportsYearB" type="number" min="2020" max="2100">
             </div>
           </div>
 
-          <div id="reportsSearchBox" class="mt" style="display:none;">
-            <label>Pretraga artikla</label>
-            <input id="reportsQuery" placeholder="npr. mleko, hleb, gorivo...">
+          <div id="reportsSearchBox" class="mt">
+            <label>Pretraga / filter artikla</label>
+            <input id="reportsQuery" placeholder="Filter: artikal, prodavac, kategorija">
           </div>
 
           <button onclick="loadReports()">Prikaži izveštaj</button>
